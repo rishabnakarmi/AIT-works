@@ -1,0 +1,125 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Feb 21 21:48:05 2024
+
+@author: User
+"""
+
+import numpy as np
+import netCDF4
+import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+from scipy.stats import pearsonr
+
+# Function to read data from NetCDF file
+def ncread(file_name, vname):
+    fil = netCDF4.Dataset(file_name, 'r')
+    dat = np.asarray(fil.variables[vname][:])
+    fil.close()
+    return dat
+
+# Function to clip image based on given boundary
+def clip_image(lat, lon, lat_b, lon_b):
+    min_lat_b = np.abs(lat - lat_b[1]).argmin()
+    max_lat_b = np.abs(lat - lat_b[0]).argmin()
+    min_lon_b = np.abs(lon - lon_b[0]).argmin()
+    max_lon_b = np.abs(lon - lon_b[1]).argmin()
+    return min_lat_b, max_lat_b, min_lon_b, max_lon_b
+
+# Function to read data within the given boundary
+def read_example_data_tem(file_name, boundary):
+    data = ncread(file_name, 'temp2m')
+    lat = ncread(file_name, 'lat')
+    lon = ncread(file_name, 'lon')
+    clat1, clat2, clon1, clon2 = clip_image(lat, lon, (boundary[0], boundary[1]), (boundary[2], boundary[3]))
+    lat = lat[clat1:clat2+1]
+    lon = lon[clon1:clon2+1]
+    data = data[clat1:clat2+1, clon1:clon2+1]
+    return data, lat, lon
+
+# Function to read data within the given boundary
+def read_example_data_wind(file_name, boundary):
+    data = ncread(file_name, 'wind10m')
+    lat = ncread(file_name, 'lat')
+    lon = ncread(file_name, 'lon')
+    clat1, clat2, clon1, clon2 = clip_image(lat, lon, (boundary[0], boundary[1]), (boundary[2], boundary[3]))
+    lat = lat[clat1:clat2+1]
+    lon = lon[clon1:clon2+1]
+    data = data[clat1:clat2+1, clon1:clon2+1]
+    return data, lat, lon
+###
+
+# Initialize lists to store temperature and wind speed data
+temperature_data = []
+wind_speed_data = []
+
+
+################################################################
+months = ['Jan', 'Feb', 'Mar', 'Apr', 'May']
+
+fig, axs = plt.subplots(1, len(months), figsize=(15, 5), subplot_kw={'projection': ccrs.PlateCarree()})
+
+boundary = (7, 16, 100, 112)  # Define boundary here
+
+for i, ax in enumerate(axs):
+    file_name = "temp2m_2023-{0:02d}.nc".format(i + 1)  # Adjust file name dynamically
+    data, lat, lon = read_example_data_tem(file_name, boundary)  # Call read_example_data inside the loop
+    data_p = data[:, :]  # Adjusted to use the i-th month's data
+    temperature_data.append(np.nanmean(data))
+    img = ax.imshow(data_p, cmap='jet', vmin=np.nanmin(data_p), vmax=np.nanmax(data_p), extent=[lon.min(), lon.max(), lat.min(), lat.max()])
+    ax.set_title('Temperature ({0} 24)'.format(months[i]))
+    ax.coastlines(resolution='10m', color='black')
+    ax.set_xlabel('Longitude')
+    
+    ax.set_ylabel('Latitude')
+    
+    ax.gridlines(draw_labels=True)
+    ax.yaxis.set_label_position('left') #Not working
+    ax.xaxis.set_label_position('bottom') #Not working
+    ax.grid(True)
+
+# Adjust layout to position x-label at the bottom and y-label on the left side
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # Adjust the rect parameter as needed    
+
+# Add a single colorbar
+cbar = fig.colorbar(img, ax=axs, orientation='horizontal', fraction=0.04, pad=0.05)
+cbar.set_label('Temperature (K)')
+
+plt.show()
+
+################################################################################
+#10m Windspeed forecast
+
+months = ['Jan', 'Feb', 'Mar', 'Apr', 'May']
+
+fig, axs = plt.subplots(1, len(months), figsize=(15, 5), subplot_kw={'projection': ccrs.PlateCarree()})
+
+boundary = (7, 16, 100, 112)  # Define boundary here
+
+for i, ax in enumerate(axs):
+    file_name = "wind10m_2023-{0:02d}.nc".format(i + 1)  # Adjust file name dynamically
+    data, lat, lon = read_example_data_wind(file_name, boundary)  # Call read_example_data inside the loop
+    data_p = data[:, :]  # Adjusted to use the i-th month's data
+    wind_speed_data.append(np.nanmean(data))
+    img = ax.imshow(data_p, cmap='RdYlGn', vmin=np.nanmin(data_p), vmax=np.nanmax(data_p), extent=[lon.min(), lon.max(), lat.min(), lat.max()])
+    ax.set_title('Wind Speed ({0} 24)'.format(months[i]))
+    ax.coastlines(resolution='10m', color='black')
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ax.gridlines(draw_labels=True)
+    ax.grid(True)
+# Adjust layout to position x-label at the bottom and y-label on the left side
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # Adjust the rect parameter as needed    
+# Add a single colorbar
+cbar = fig.colorbar(img, ax=axs, orientation='horizontal', fraction=0.04, pad=0.05)
+cbar.set_label('Wind Speed (m/s)')
+
+plt.show()
+
+correlation_coefficient, _ = pearsonr(temperature_data, wind_speed_data)
+
+print("Correlation Coefficient between Temperature and Wind Speed:", correlation_coefficient)
+
+
+
+
